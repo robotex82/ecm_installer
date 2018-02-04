@@ -1,0 +1,65 @@
+ruby '2.5.0'
+
+# Use friendly_id from github for now to fix migration error.
+# See: https://github.com/norman/friendly_id/issues/805
+#
+gem 'friendly_id', git: 'https://github.com/norman/friendly_id'
+
+# Using therubyracer as less-rails does not support mini_racer at the moment.
+gem 'therubyracer', platforms: :ruby
+
+gem 'non-stupid-digest-assets'
+gem 'simple_form'
+gem 'route_translator'
+
+group :development, :test do
+  gem 'factory_bot_rails'
+  gem 'i18n-debug'
+  gem 'pry-rails'
+  gem 'rspec-rails'
+end
+
+group :test do
+  gem 'shoulda-matchers'
+end
+
+group :development do
+  gem 'guard-bundler', require: false
+  gem 'guard-rspec',   require: false
+end
+
+group :production do
+  gem 'delayed_job_active_record'
+  gem "aws-sdk-s3", require: false
+end
+
+gem 'itsf_backend',              path: '~/rails/itsf/itsf_backend'
+
+gem 'ecm_core',                  path: '~/rails/ecm/ecm_core'
+
+gem 'ecm_blog',                  path: '~/rails/ecm/ecm_blog'
+gem 'ecm_blog_backend',          path: '~/rails/ecm/ecm_blog_backend'
+
+gem 'ecm_cms2',                  path: '~/rails/ecm/ecm_cms2'
+gem 'ecm_cms2_backend',          path: '~/rails/ecm/ecm_cms2_backend'
+
+gem 'ecm_comments',              path: '~/rails/ecm/ecm_comments'
+gem 'ecm_comments_backend',      path: '~/rails/ecm/ecm_comments_backend'
+
+gem 'ecm_contact2',              path: '~/rails/ecm/ecm_contact2'
+gem 'ecm_contact2_backend',      path: '~/rails/ecm/ecm_contact2_backend'
+
+gem 'ecm_links2',                path: '~/rails/ecm/ecm_links2'
+gem 'ecm_links2_backend',        path: '~/rails/ecm/ecm_links2_backend'
+
+gem 'ecm_rbac',                  path: '~/rails/ecm/ecm_rbac'
+gem 'ecm_rbac_backend',          path: '~/rails/ecm/ecm_rbac_backend'
+
+gem 'ecm_tags',                  path: '~/rails/ecm/ecm_tags'
+gem 'ecm_tags_backend',          path: '~/rails/ecm/ecm_tags_backend'
+
+gem 'ecm_translations2',         path: '~/rails/ecm/ecm_translations2'
+gem 'ecm_translations2_backend', path: '~/rails/ecm/ecm_translations2_backend'
+
+gem 'ecm_user_area2',            path: '~/rails/ecm/ecm_user_area2'
+gem 'ecm_user_area2_backend',    path: '~/rails/ecm/ecm_user_area2_backend'

@@ -1,0 +1,1 @@
+require_dependency '<%= underscore(app_name) %>/version'
