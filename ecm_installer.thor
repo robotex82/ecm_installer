@@ -20,7 +20,9 @@ module Ecm
 
     # Define arguments and options
     argument :app_name
-    # class_option :test_framework, :default => :test_unit
+    class_option :ecm_rbac_user_class_name, default: 'Ecm::UserArea::User'
+    class_option :generate_heroku_apps,     default: false, type: :boolean
+    class_option :deploy_heroku_apps,       default: false, type: :boolean
 
     def self.source_root
       File.dirname(__FILE__)
@@ -110,7 +112,6 @@ module Ecm
 
     def run_rspec_installer
       run("cd #{app_name} && bundle exec rails generate rspec:install")
-      #`cd #{app_name} && bundle exec rails generate rspec:install`
     end
 
     def modify_rspec_config
@@ -129,6 +130,48 @@ module Ecm
 
     def generate_shoulda_matchers_config
       template('templates/spec/support/shoulda_matchers.rb', "#{app_name}/spec/support/shoulda_matchers.rb")
+    end
+
+    ###########################################################################
+    # Frontend engine
+    ###########################################################################
+
+    def generate_frontend_engine
+      run("cd #{app_name} && rails plugin new Frontend -T --dummy-path=spec/dummy --full --mountable")
+    end
+
+    def move_frontend_engine_to_engines_folder
+      run("cd #{app_name} && mkdir ./engines && mv ./Frontend ./engines/frontend")
+    end
+
+    def modify_frontend_engine_gemspec
+      gsub_file "#{app_name}/engines/frontend/frontend.gemspec", /TODO: Summary of Frontend./, "#{app_name} Frontend"
+      gsub_file "#{app_name}/engines/frontend/frontend.gemspec", /  s.homepage    = "TODO"\n/, ""
+      gsub_file "#{app_name}/engines/frontend/frontend.gemspec", /  s.description = "TODO: Description of Frontend."\n/, ""
+      gsub_file "#{app_name}/Gemfile", /\ngem 'frontend', path: 'Frontend'/m, ''
+    end
+
+    def add_bootstrap_to_frontend_engine
+      insert_into_file "#{app_name}/engines/frontend/frontend.gemspec", before: "\nend" do
+        "\n  s.add_runtime_dependency 'bootstrap', '~> 4.0.0'\n  s.add_runtime_dependency 'jquery-rails'"
+      end
+      insert_into_file "#{app_name}/engines/frontend/lib/frontend.rb", before: '\nrequire "frontend/engine"' do
+        "\n  require 'bootstrap'"
+      end
+      template('templates/engines/frontend/app/assets/stylesheets/frontend/application/bootstrap_and_overrides.scss', "#{app_name}/engines/frontend/app/assets/stylesheets/frontend/application/bootstrap_and_overrides.scss")
+      gsub_file "#{app_name}/engines/frontend/app/assets/stylesheets/frontend/application.css", / \*= require_tree \./, ' *= require_tree ./application'
+
+      insert_into_file "#{app_name}/engines/frontend/app/assets/javascripts/frontend/application.js", before: "\n//= require_tree ." do
+        "\n//= require jquery3\n//= require popper\n//= require bootstrap-sprockets"
+      end
+    end
+      
+    def add_frontend_engine_to_main_application
+      append_to_file "#{app_name}/Gemfile.application", "\n\ngem 'frontend', path: './engines/frontend'"
+    end
+
+    def bundle_after_frontend_engine_installation
+      run("cd #{app_name} && bundle install")
     end
 
     ###########################################################################
@@ -207,10 +250,14 @@ module Ecm
       ecm_user_area_backend
     )
     def run_ecm_installers
-      (ECM_MODULES + ECM_BACKEND_MODULES).each do |name|
+      (ECM_MODULES + ECM_BACKEND_MODULES - ['ecm_rbac']).each do |name|
         generator_name = "#{name.gsub('ecm_', 'ecm:').gsub('_backend', ':backend')}:install"
         run("cd #{app_name} && bundle exec rails generate #{generator_name}")
       end
+    end
+
+    def run_ecm_rbac_installer
+      run("cd #{app_name} && ECM_RBAC_USER_CLASS_NAME=#{options[:ecm_rbac_user_class_name]} bundle exec rails generate ecm:rbac:install")
     end
 
     def generate_ecm_migrations
@@ -225,6 +272,13 @@ module Ecm
     end
 
   
+    ###########################################################################
+    # ECM CMS setup
+    ###########################################################################
+    def run_homepage_generator
+      run("cd #{app_name} && rails ecm:cms:add_homepages")
+    end
+
     ###########################################################################
     # ECM User Area setup
     ###########################################################################
@@ -278,9 +332,19 @@ module Ecm
     ###########################################################################
 
     def create_heroku_staging_app
+      if generate_heroku_apps?
+        run("cd #{app_name} && heroku create --remote staging")
+      else
+        puts "Skip #{__method__}"
+      end
     end
 
     def create_heroku_production_app
+      if generate_heroku_apps?
+        run("cd #{app_name} && heroku create --remote production")
+      else
+        puts "Skip #{__method__}"
+      end
     end
 
     ###########################################################################
@@ -288,9 +352,35 @@ module Ecm
     ###########################################################################
 
     def deploy_staging
+      if deploy_heroku_apps?
+        run("cd #{app_name} && git push staging master")
+      else
+        puts "Skip #{__method__}"
+      end
+    end
+
+    def run_migration_in_staging
+      if deploy_heroku_apps?
+        run("cd #{app_name} && heroku run rails db:migrate --remote staging")
+      else
+        puts "Skip #{__method__}"
+      end
     end
 
     def deploy_production
+      if deploy_heroku_apps?
+        run("cd #{app_name} && git push production master")
+      else
+        puts "Skip #{__method__}"
+      end
+    end
+
+    def run_migration_in_production
+      if deploy_heroku_apps?
+        run("cd #{app_name} && heroku run rails db:migrate --remote production")
+      else
+        puts "Skip #{__method__}"
+      end
     end
 
     # def create_lib_file
@@ -330,6 +420,14 @@ module Ecm
         gsub(/([a-z\d])([A-Z])/,'\1_\2').
         tr("-", "_").
         downcase
+    end
+
+    def generate_heroku_apps?
+      !!options[:generate_heroku_apps]
+    end
+
+    def deploy_heroku_apps?
+      !!options[:deploy_heroku_apps]
     end
   end
 end

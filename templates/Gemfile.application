@@ -9,6 +9,12 @@ gem 'friendly_id', git: 'https://github.com/norman/friendly_id'
 gem 'therubyracer', platforms: :ruby
 
 gem 'non-stupid-digest-assets'
+
+# Using ransack from github fixes wrong number of arguments.
+# See: https://github.com/activerecord-hackery/ransack/issues/853
+#
+gem 'ransack', git: 'https://github.com/activerecord-hackery/ransack'
+
 gem 'simple_form'
 gem 'route_translator'
 
