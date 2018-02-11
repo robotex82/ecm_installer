@@ -23,6 +23,7 @@ module Ecm
     class_option :ecm_rbac_user_class_name, default: 'Ecm::UserArea::User'
     class_option :generate_heroku_apps,     default: false, type: :boolean
     class_option :deploy_heroku_apps,       default: false, type: :boolean
+    class_option :base_controller_class_name, default: 'Frontend::ApplicationController'
 
     def self.source_root
       File.dirname(__FILE__)
@@ -151,12 +152,28 @@ module Ecm
       gsub_file "#{app_name}/Gemfile", /\ngem 'frontend', path: 'Frontend'/m, ''
     end
 
+    def add_gems_to_frontend_engine
+      insert_into_file "#{app_name}/engines/frontend/frontend.gemspec", before: "\nend" do
+        "\n  s.add_runtime_dependency 'haml-rails'\n  s.add_runtime_dependency 'twitter-bootstrap-components-rails'"
+      end
+  
+      insert_into_file "#{app_name}/engines/frontend/lib/frontend.rb", before: 'require "frontend/engine"' do
+        "\nrequire 'haml-rails'\nrequire 'twitter_bootstrap_components_rails'\n"
+      end
+    end
+
+    def add_twitter_bootstrap_components_rails_to_frontend_engine
+      insert_into_file "#{app_name}/engines/frontend/app/controllers/frontend/application_controller.rb", after: "  class ApplicationController < ActionController::Base\n" do
+        "    helper Twitter::Bootstrap::Components::Rails::V4::ComponentsHelper\n"
+      end
+    end
+
     def add_bootstrap_to_frontend_engine
       insert_into_file "#{app_name}/engines/frontend/frontend.gemspec", before: "\nend" do
         "\n  s.add_runtime_dependency 'bootstrap', '~> 4.0.0'\n  s.add_runtime_dependency 'jquery-rails'"
       end
-      insert_into_file "#{app_name}/engines/frontend/lib/frontend.rb", before: '\nrequire "frontend/engine"' do
-        "\n  require 'bootstrap'"
+      insert_into_file "#{app_name}/engines/frontend/lib/frontend.rb", before: 'require "frontend/engine"' do
+        "\nrequire 'bootstrap'\nrequire 'popper_js'\n"
       end
       template('templates/engines/frontend/app/assets/stylesheets/frontend/application/bootstrap_and_overrides.scss', "#{app_name}/engines/frontend/app/assets/stylesheets/frontend/application/bootstrap_and_overrides.scss")
       gsub_file "#{app_name}/engines/frontend/app/assets/stylesheets/frontend/application.css", / \*= require_tree \./, ' *= require_tree ./application'
@@ -164,6 +181,18 @@ module Ecm
       insert_into_file "#{app_name}/engines/frontend/app/assets/javascripts/frontend/application.js", before: "\n//= require_tree ." do
         "\n//= require jquery3\n//= require popper\n//= require bootstrap-sprockets"
       end
+    end
+
+    def add_bootstrap_layout_to_frontend_engine
+      template('templates/engines/frontend/app/views/layouts/frontend/application.haml', "#{app_name}/engines/frontend/app/views/layouts/frontend/application.haml")
+    end
+
+    def add_navigation_to_frontend_engine
+      template('templates/engines/frontend/app/views/frontend/application/_navbar.haml', "#{app_name}/engines/frontend/app/views/frontend/application/_navbar.haml")
+    end
+
+    def remove_erb_layout_from_frontend_enigine
+      remove_file("#{app_name}/engines/frontend/app/views/layouts/frontend/application.html.erb")
     end
       
     def add_frontend_engine_to_main_application
@@ -173,6 +202,7 @@ module Ecm
     def bundle_after_frontend_engine_installation
       run("cd #{app_name} && bundle install")
     end
+
 
     ###########################################################################
     # Heroku setup
@@ -250,14 +280,21 @@ module Ecm
       ecm_user_area_backend
     )
     def run_ecm_installers
-      (ECM_MODULES + ECM_BACKEND_MODULES - ['ecm_rbac']).each do |name|
+      (ECM_MODULES - ['ecm_rbac']).each do |name|
+        generator_name = "#{name.gsub('ecm_', 'ecm:').gsub('_backend', ':backend')}:install"
+        run("cd #{app_name} && BASE_CONTROLLER_CLASS_NAME=#{options[:base_controller_class_name]} bundle exec rails generate #{generator_name}")
+      end
+    end
+
+    def run_ecm_backend_installers
+      ECM_BACKEND_MODULES.each do |name|
         generator_name = "#{name.gsub('ecm_', 'ecm:').gsub('_backend', ':backend')}:install"
         run("cd #{app_name} && bundle exec rails generate #{generator_name}")
       end
     end
 
     def run_ecm_rbac_installer
-      run("cd #{app_name} && ECM_RBAC_USER_CLASS_NAME=#{options[:ecm_rbac_user_class_name]} bundle exec rails generate ecm:rbac:install")
+      run("cd #{app_name} && BASE_CONTROLLER_CLASS_NAME=#{options[:base_controller_class_name]} ECM_RBAC_USER_CLASS_NAME=#{options[:ecm_rbac_user_class_name]} bundle exec rails generate ecm:rbac:install")
     end
 
     def generate_ecm_migrations
@@ -271,13 +308,14 @@ module Ecm
     def add_ecm_specs
     end
 
-  
     ###########################################################################
-    # ECM CMS setup
+    # ECM Core setup
     ###########################################################################
-    def run_homepage_generator
-      run("cd #{app_name} && rails ecm:cms:add_homepages")
-    end
+    def add_ecm_core_to_frontend_application_controller
+      insert_into_file "#{app_name}/engines/frontend/app/controllers/frontend/application_controller.rb", after: "  class ApplicationController < ActionController::Base\n" do
+        "    helper Ecm::Core::ApplicationHelper\n"
+      end
+    end 
 
     ###########################################################################
     # ECM User Area setup
@@ -285,6 +323,12 @@ module Ecm
     def add_ecm_user_area_helpers_to_application_controller
       insert_into_file "#{app_name}/app/controllers/application_controller.rb", after: "class ApplicationController < ActionController::Base\n" do
         "  helper Ecm::UserAreaHelper\n"
+      end
+    end
+
+    def add_ecm_user_area_to_frontend_application_controller
+      insert_into_file "#{app_name}/engines/frontend/app/controllers/frontend/application_controller.rb", after: "  class ApplicationController < ActionController::Base\n" do
+        "    include Controller::CurrentUserConcern\n    include Controller::RedirectBackConcern\n    helper Ecm::UserAreaHelper\n"
       end
     end
     
@@ -313,6 +357,14 @@ module Ecm
 
     def create_default_user
       run("cd #{app_name} && rake ecm:user_area:create_default_user")
+    end
+
+    ###########################################################################
+    # ECM CMS setup
+    ###########################################################################
+
+    def run_homepage_generator
+      run("cd #{app_name} && rails ecm:cms:add_homepages")
     end
 
     ###########################################################################

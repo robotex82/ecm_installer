@@ -1,0 +1,16 @@
+!!!
+%html{:lang => I18n.locale}
+  %head
+    / Required meta tags
+    %meta{:charset => "utf-8"}/
+    %meta{:content => "width=device-width, initial-scale=1, shrink-to-fit=no", :name => "viewport"}/
+    = csrf_meta_tags
+    = stylesheet_link_tag    'frontend/application', media: 'all', 'data-turbolinks-track': 'reload'
+    = javascript_include_tag 'frontend/application', 'data-turbolinks-track': 'reload'
+  %body
+    = render 'navbar'
+    .container-fluid
+      .row
+        .col-lg-12
+          = bootstrap_flash
+          = yield
