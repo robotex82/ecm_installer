@@ -1,0 +1,3 @@
+
+
+  mount <%= plugin_name %>::Engine, at: '/'
